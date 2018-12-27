@@ -1,5 +1,8 @@
 # Hermes: A Cache For Apollo Client
 
+> NOTE: This repository also adds support for query paritioning as detailed in the interface here 
+https://github.com/masterkidan/apollo-client/pull/1
+
 [![npm](https://img.shields.io/npm/v/apollo-cache-hermes.svg)](https://www.npmjs.com/package/apollo-cache-hermes)
 [![Build Status](https://img.shields.io/circleci/project/github/convoyinc/apollo-cache-hermes/master.svg)](https://circleci.com/gh/convoyinc/workflows/apollo-cache-hermes)
 [![Code Coverage](https://img.shields.io/codecov/c/github/convoyinc/apollo-cache-hermes.svg)](https://codecov.io/gh/convoyinc/apollo-cache-hermes)
