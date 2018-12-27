@@ -1,17 +1,20 @@
+import { SelectionNode } from 'graphql';
+
 import { ParsedQueryWithVariables } from '../ParsedQueryNode';
 import { JsonObject, JsonValue, PathPart } from '../primitive';
 
 class OperationWalkNode {
   constructor(
     public readonly parsedOperation: ParsedQueryWithVariables,
+    public readonly parentSelection: SelectionNode,
     public readonly parent?: JsonValue,
-  ) {}
+  ) { }
 }
 
 /**
  * Returning true indicates that the walk should STOP.
  */
-export type OperationVisitor = (parent: JsonValue | undefined, fields: string[]) => boolean;
+export type OperationVisitor = (parent: JsonValue | undefined, fields: [string, SelectionNode][], parentSelection: SelectionNode) => boolean;
 
 /**
  * Walk and run on ParsedQueryNode and the result.
@@ -21,10 +24,10 @@ export function walkOperation(rootOperation: ParsedQueryWithVariables, result: J
 
   // Perform the walk as a depth-first traversal; and unlike the payload walk,
   // we don't bother tracking the path.
-  const stack = [new OperationWalkNode(rootOperation, result)];
+  const stack = [new OperationWalkNode(rootOperation, <unknown>undefined as SelectionNode, result)];
 
   while (stack.length) {
-    const { parsedOperation, parent } = stack.pop()!;
+    const { parsedOperation, parent, parentSelection } = stack.pop()!;
     // We consider null nodes to be skippable (and satisfy the walk).
     if (parent === null) continue;
 
@@ -32,24 +35,32 @@ export function walkOperation(rootOperation: ParsedQueryWithVariables, result: J
     if (Array.isArray(parent)) {
       // Push in reverse purely for ergonomics: they'll be pulled off in order.
       for (let i = parent.length - 1; i >= 0; i--) {
-        stack.push(new OperationWalkNode(parsedOperation, parent[i]));
+        stack.push(new OperationWalkNode(parsedOperation, parentSelection, parent[i]));
       }
       continue;
     }
 
-    const fields: string[] = [];
+    const fields: [string, SelectionNode][] = [];
     // TODO: Directives?
     for (const fieldName in parsedOperation) {
-      fields.push(fieldName);
-      const nextParsedQuery = parsedOperation[fieldName].children;
-      if (nextParsedQuery) {
-        stack.push(new OperationWalkNode(nextParsedQuery, get(parent, fieldName)));
-      }
+      fields.push([fieldName, parsedOperation[fieldName].selection]);
     }
 
     if (fields.length) {
-      const shouldStop = visitor(parent, fields);
-      if (shouldStop) return;
+      // NOTE: If fields have been walked, then selections will be present for those fields, except in the case 
+      // of root level selections.
+      const shouldStop = visitor(parent, fields, parentSelection);
+      // shouldStop == true if the parent itself is undefined/ if any of the selections are not defined. 
+      // When shouldStop == false, we must actually visit the children to see if the grandchildren are defined as well.
+      if (!shouldStop) {
+        for (const fieldName in parsedOperation) {
+          const nextParsedQuery = parsedOperation[fieldName].children;
+          if (nextParsedQuery) {
+            // Queuing up the children walk, pass in the parent as the current selection node.
+            stack.push(new OperationWalkNode(nextParsedQuery, parsedOperation[fieldName].selection, get(parent, fieldName)));
+          }
+        }
+      }
     }
   }
 }

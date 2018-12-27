@@ -1,9 +1,12 @@
+import { getMainDefinition, shouldInclude, FragmentMap } from 'apollo-utilities';
+import { SelectionSetNode, SelectionNode, DocumentNode } from 'graphql';
+
 import { CacheContext } from '../context';
 import { GraphSnapshot } from '../GraphSnapshot';
 import { ParsedQuery } from '../ParsedQueryNode';
 import { JsonObject, JsonValue, PathPart } from '../primitive';
 import { NodeId, OperationInstance, RawOperation, StaticNodeId } from '../schema';
-import { isNil, isObject, walkOperation, deepGet } from '../util';
+import { isNil, isObject, walkOperation, deepGet, fragmentMapForDocument } from '../util';
 
 import { nodeIdForParameterizedValue } from './SnapshotEditor';
 
@@ -16,6 +19,8 @@ export interface QueryResult {
   entityIds?: Set<NodeId>;
   /** The ids of nodes overlaid on top of static cache results. */
   dynamicNodeIds?: Set<NodeId>;
+  /** The selections that were missing in the cache */
+  partitionedQuery: DocumentNode;
 }
 
 export interface QueryResultWithNodeIds extends QueryResult {
@@ -39,7 +44,7 @@ export function read(context: CacheContext, raw: RawOperation, snapshot: GraphSn
   // Retrieve the previous result (may be partially complete), or start anew.
   const queryResult = snapshot.readCache.get(operation) || {} as Partial<QueryResultWithNodeIds>;
   snapshot.readCache.set(operation, queryResult as QueryResult);
-
+  let missingFields: SelectionNode[] = [];
   let cacheHit = true;
   if (!queryResult.result) {
     cacheHit = false;
@@ -55,9 +60,9 @@ export function read(context: CacheContext, raw: RawOperation, snapshot: GraphSn
 
     // When strict mode is disabled, we carry completeness forward for observed
     // queries.  Once complete, always complete.
-    if (typeof queryResult.complete !== 'boolean') {
-      queryResult.complete = _visitSelection(operation, context, queryResult.result, queryResult.entityIds);
-    }
+    const visitResult = _visitSelection(operation, context, queryResult.result, queryResult.entityIds);
+    queryResult.complete = visitResult.complete;
+    missingFields = visitResult.missingFields;
   }
 
   // We can potentially ask for results without node ids first, and then follow
@@ -66,11 +71,16 @@ export function read(context: CacheContext, raw: RawOperation, snapshot: GraphSn
   if (includeNodeIds && !queryResult.entityIds) {
     cacheHit = false;
     const entityIds = new Set<NodeId>();
-    const complete = _visitSelection(operation, context, queryResult.result, entityIds);
-    queryResult.complete = complete;
+    const visitResult = _visitSelection(operation, context, queryResult.result, entityIds);
+    queryResult.complete = visitResult.complete;
+    missingFields = visitResult.missingFields;
     queryResult.entityIds = entityIds;
   }
-
+  if (!queryResult.result || missingFields.length === 0) {
+    queryResult.partitionedQuery = raw.document;
+  } else {
+    queryResult.partitionedQuery = partitionQuery(missingFields, raw).document;
+  }
   if (context.tracer.readEnd) {
     const result = { result: queryResult as QueryResult, cacheHit };
     context.tracer.readEnd(operation, result, tracerContext);
@@ -79,13 +89,89 @@ export function read(context: CacheContext, raw: RawOperation, snapshot: GraphSn
   return queryResult;
 }
 
+function partitionQuery(
+  fields: SelectionNode[],
+  originalOperation: RawOperation,
+): RawOperation {
+  const mainDefinition = getMainDefinition(originalOperation.document);
+  const fragmentMap = fragmentMapForDocument(originalOperation.document);
+  return {
+    ...originalOperation,
+    document: {
+      ...originalOperation.document,
+      definitions: [
+        {
+          ...mainDefinition,
+          selectionSet: findMissingSelectionSets(mainDefinition.selectionSet, { variableValues: originalOperation.variables, fragmentMap }, fields),
+        },
+      ],
+    },
+  };
+}
+
+function findMissingSelectionSets(
+  selectionSet: SelectionSetNode,
+  execContext: {
+    variableValues: any;
+    fragmentMap: FragmentMap
+  },
+  fields: SelectionNode[],
+): SelectionSetNode {
+  const { variableValues: variables } = execContext;
+
+  const resultSelectionsSet = {
+    ...selectionSet,
+    selections: [] as SelectionNode[],
+  };
+  selectionSet.selections.forEach((selection) => {
+    if (!shouldInclude(selection, variables)) {
+      // Skip this entirely
+      return;
+    }
+
+    if (selection.kind === 'Field') {
+      if (!selection.selectionSet) {
+        // Handle scalar selections
+        if (fields.indexOf(selection) !== -1) {
+          resultSelectionsSet.selections.push(selection);
+        } else {
+          // Field is not missing and should not be added to the selection set.
+
+        }
+      } else {
+        // In the case of subselections, if the parent is in the missing list,
+        // traversing through the subfields is pointless,
+        // hence inserting the parent and continuing.
+        if (fields.indexOf(selection) !== -1) {
+          resultSelectionsSet.selections.push(selection);
+        } else {
+          // If parent is not listed as missing, we still need to check the
+          // subfields, hence checking those here.
+          const selectionToInsert = findMissingSelectionSets(
+            selection.selectionSet,
+            execContext,
+            fields,
+          );
+          if (selectionToInsert.selections.length > 0) {
+            resultSelectionsSet.selections.push({
+              ...selection,
+              selectionSet: selectionToInsert,
+            });
+          }
+        }
+      }
+    }
+  });
+  return resultSelectionsSet;
+}
+
 class OverlayWalkNode {
   constructor(
     public readonly value: JsonObject,
     public readonly containerId: NodeId,
     public readonly parsedMap: ParsedQuery,
     public readonly path: PathPart[],
-  ) {}
+  ) { }
 }
 
 /**
@@ -218,20 +304,23 @@ export function _visitSelection(
   context: CacheContext,
   result?: JsonObject,
   nodeIds?: Set<NodeId>,
-): boolean {
+): { complete: boolean, missingFields: SelectionNode[] } {
   let complete = true;
+  const missingFields: SelectionNode[] = [];
   if (nodeIds && result !== undefined) {
     nodeIds.add(query.rootId);
   }
 
   // TODO: Memoize per query, and propagate through cache snapshots.
-  walkOperation(query.info.parsed, result, (value, fields) => {
+  walkOperation(query.info.parsed, result, (value, fields, parentSelection) => {
     if (value === undefined) {
       complete = false;
+      // Parent selection will be undefined if the root query node itself is missing.
+      if (parentSelection) {
+        missingFields.push(parentSelection);
+      }
+      return true; // No point traversing the fields if the root itself is not defined.
     }
-
-    // If we're not including node ids, we can stop the walk right here.
-    if (!complete) return !nodeIds;
 
     if (!isObject(value)) return false;
 
@@ -242,8 +331,9 @@ export function _visitSelection(
       }
     }
 
-    for (const field of fields) {
-      if (!(field in value)) {
+    for (const [field, fieldNode] of fields) {
+      if (!(field in value)) {      
+        missingFields.push(fieldNode);
         complete = false;
         break;
       }
@@ -252,5 +342,5 @@ export function _visitSelection(
     return false;
   });
 
-  return complete;
+  return { complete, missingFields };
 }

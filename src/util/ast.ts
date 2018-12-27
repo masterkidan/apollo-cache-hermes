@@ -1,3 +1,4 @@
+// We only depend on graphql for its types; nothing at runtime.
 import { valueFromNode, FragmentMap } from 'apollo-utilities';
 // We only depend on graphql for its types; nothing at runtime.
 import { // eslint-disable-line import/no-extraneous-dependencies
@@ -7,11 +8,6 @@ import { // eslint-disable-line import/no-extraneous-dependencies
   SelectionSetNode,
   FieldNode,
 } from 'graphql';
-
-import { JsonValue } from '../primitive';
-
-import { isObject } from './primitive';
-
 export {
   getOperationDefinitionOrDie as getOperationOrDie,
   variablesInOperation,
@@ -22,14 +18,18 @@ export {
 // AST types for convenience.
 export {
   ArgumentNode,
-  DocumentNode,
-  OperationDefinitionNode,
   OperationTypeNode,
   SelectionNode,
-  SelectionSetNode,
+  DocumentNode,
+  OperationDefinitionNode,
   ValueNode,
-  // FieldNode,
+  SelectionSetNode,
+  FieldNode,
 } from 'graphql';
+
+import { JsonValue } from '../primitive';
+
+import { isObject } from './primitive';
 
 /**
  * Returns the default values of all variables in the operation.

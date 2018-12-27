@@ -1,4 +1,5 @@
 import gql from 'graphql-tag';
+import { FieldNode } from 'graphql';
 
 import { CacheContext } from '../../../src/context';
 import { ParsedQueryNode, parseQuery, VariableArgument } from '../../../src/ParsedQueryNode';
@@ -17,7 +18,7 @@ describe(`parseQuery with parameterized queries`, () => {
   it(`parses single-field queries`, () => {
     expect(parseOperation(`{ foo(arg: 1) }`)).to.deep.eq({
       parsedQuery: {
-        foo: new ParsedQueryNode(undefined, undefined, { arg: 1 }),
+        foo: new ParsedQueryNode((<any>null) as FieldNode, undefined, undefined, { arg: 1 }),
       },
       variables: new Set(),
     });
@@ -31,7 +32,7 @@ describe(`parseQuery with parameterized queries`, () => {
     `;
     expect(parseOperation(operation)).to.deep.eq({
       parsedQuery: {
-        foo: new ParsedQueryNode(undefined, undefined, { limit: new VariableArgument('count') }),
+        foo: new ParsedQueryNode((<any>null) as FieldNode, undefined, undefined, { limit: new VariableArgument('count') }),
       },
       variables: new Set(['count']),
     });
@@ -49,9 +50,9 @@ describe(`parseQuery with parameterized queries`, () => {
     `;
     expect(parseOperation(operation)).to.deep.eq({
       parsedQuery: {
-        foo: new ParsedQueryNode({
-          bar: new ParsedQueryNode({
-            baz: new ParsedQueryNode(undefined, undefined, { limit: new VariableArgument('count') }),
+        foo: new ParsedQueryNode((<any>null) as FieldNode, {
+          bar: new ParsedQueryNode((<any>null) as FieldNode, {
+            baz: new ParsedQueryNode((<any>null) as FieldNode, undefined, undefined, { limit: new VariableArgument('count') }),
           }, undefined, undefined, true),
         }, undefined, undefined, true),
       },
@@ -71,9 +72,9 @@ describe(`parseQuery with parameterized queries`, () => {
     `;
     expect(parseOperation(operation)).to.deep.eq({
       parsedQuery: {
-        foo: new ParsedQueryNode({
-          bar: new ParsedQueryNode<JsonScalar | VariableArgument>({
-            baz: new ParsedQueryNode(),
+        foo: new ParsedQueryNode((<any>null) as FieldNode, {
+          bar: new ParsedQueryNode<JsonScalar | VariableArgument>((<any>null) as FieldNode, {
+            baz: new ParsedQueryNode((<any>null) as FieldNode),
           }, undefined, { limit: new VariableArgument('count') }),
         }, undefined, undefined, true),
       },

@@ -1,4 +1,5 @@
 import gql from 'graphql-tag';
+import { FieldNode } from 'graphql';
 
 import { CacheContext } from '../../../src/context';
 import { ParsedQueryNode, parseQuery } from '../../../src/ParsedQueryNode';
@@ -16,7 +17,7 @@ describe(`parseQuery with static queries`, () => {
   it(`parses single-field queries`, () => {
     expect(parseOperation(`{ foo }`)).to.deep.eq({
       parsedQuery: {
-        foo: new ParsedQueryNode(),
+        foo: new ParsedQueryNode((<any>null) as FieldNode),
       },
       variables: new Set(),
     });
@@ -31,12 +32,12 @@ describe(`parseQuery with static queries`, () => {
     }`;
     expect(parseOperation(operation)).to.deep.eq({
       parsedQuery: {
-        foo: new ParsedQueryNode({
-          bar: new ParsedQueryNode({
-            fizz: new ParsedQueryNode(),
+        foo: new ParsedQueryNode((<any>null) as FieldNode, {
+          bar: new ParsedQueryNode((<any>null) as FieldNode, {
+            fizz: new ParsedQueryNode((<any>null) as FieldNode)
           }),
-          baz: new ParsedQueryNode({
-            buzz: new ParsedQueryNode(),
+          baz: new ParsedQueryNode((<any>null) as FieldNode, {
+            buzz: new ParsedQueryNode((<any>null) as FieldNode),
           }),
         }),
       },
@@ -47,7 +48,7 @@ describe(`parseQuery with static queries`, () => {
   it(`includes a schemaName when a field is aliased`, () => {
     expect(parseOperation(`{ foo: bar }`)).to.deep.eq({
       parsedQuery: {
-        foo: new ParsedQueryNode(undefined, 'bar'),
+        foo: new ParsedQueryNode((<any>null) as FieldNode, undefined, 'bar'),
       },
       variables: new Set(),
     });
@@ -61,9 +62,9 @@ describe(`parseQuery with static queries`, () => {
     }`;
     expect(parseOperation(operation)).to.deep.eq({
       parsedQuery: {
-        foo: new ParsedQueryNode(undefined, 'fizz'),
-        bar: new ParsedQueryNode(undefined, 'fizz'),
-        fizz: new ParsedQueryNode(),
+        foo: new ParsedQueryNode((<any>null) as FieldNode, undefined, 'fizz'),
+        bar: new ParsedQueryNode((<any>null) as FieldNode, undefined, 'fizz'),
+        fizz: new ParsedQueryNode((<any>null) as FieldNode),
       },
       variables: new Set(),
     });

@@ -49,7 +49,7 @@ export class CacheTransaction implements Queryable {
   /**
    * Executes reads against the current values in the transaction.
    */
-  read(query: RawOperation): { result?: JsonValue, complete: boolean } {
+  read(query: RawOperation): { result?: JsonValue, complete: boolean, partitionedQuery: DocumentNode } {
     return read(
       this._context,
       query,

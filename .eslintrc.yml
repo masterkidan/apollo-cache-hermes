@@ -112,7 +112,7 @@ rules:
   newline-per-chained-call: [error, { ignoreChainWithDepth: 3 }]
   no-array-constructor: error
   no-bitwise: error
-  no-lonely-if: error
+  no-lonely-if: warn
   no-mixed-operators: error
   no-multiple-empty-lines: [error, { max: 1 }]
   no-new-object: error

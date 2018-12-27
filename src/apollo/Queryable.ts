@@ -17,13 +17,13 @@ export abstract class ApolloQueryable implements DataProxy {
 
   diff<T>(options: Cache.DiffOptions): Cache.DiffResult<T | any> {
     const rawOperation = buildRawOperationFromQuery(options.query, options.variables);
-    const { result, complete } = this._queryable.read(rawOperation, options.optimistic);
+    const { result, complete, partitionedQuery } = this._queryable.read(rawOperation, options.optimistic);
     if (options.returnPartialData === false && !complete) {
       // TODO: Include more detail with this error.
       throw new UnsatisfiedCacheError(`diffQuery not satisfied by the cache.`);
     }
 
-    return { result, complete };
+    return { result, complete, partitionedQuery };
   }
 
   read(options: Cache.ReadOptions): any {

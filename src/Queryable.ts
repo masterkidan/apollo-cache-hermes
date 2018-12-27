@@ -22,7 +22,7 @@ export interface Queryable {
    * TODO: Can we drop non-optimistic reads?
    * https://github.com/apollographql/apollo-client/issues/1971#issuecomment-319402170
    */
-  read(query: RawOperation, optimistic?: boolean): { result?: JsonValue, complete: boolean };
+  read(query: RawOperation, optimistic?: boolean): { result?: JsonValue, complete: boolean, partitionedQuery: DocumentNode };
 
   /**
    * Writes values for a selection to the cache.

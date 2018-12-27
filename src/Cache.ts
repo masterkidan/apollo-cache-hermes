@@ -228,14 +228,14 @@ export class Cache implements Queryable {
  */
 function _copyUnaffectedCachedReads(lastSnapshot: GraphSnapshot, nextSnapshot: GraphSnapshot, editedNodeIds: Set<NodeId>, strict: boolean) {
   for (const [operation, result] of lastSnapshot.readCache) {
-    const { complete, entityIds, dynamicNodeIds } = result;
+    const { complete, entityIds, dynamicNodeIds, partitionedQuery } = result;
     // We don't care about incomplete results.
     if (!complete) continue;
 
     // If we're not in strict mode; we can carry completeness forward (and
     // not bother copying results forward, as its cheaper to just fetch again).
     if (!strict) {
-      nextSnapshot.readCache.set(operation, { complete: true });
+      nextSnapshot.readCache.set(operation, { complete: true, partitionedQuery });
       continue;
     }
 

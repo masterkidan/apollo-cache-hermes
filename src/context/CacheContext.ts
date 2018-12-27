@@ -1,26 +1,16 @@
-import { addTypenameToDocument, isEqual } from 'apollo-utilities';
+import { addTypenameToDocument, isEqual, getMainDefinition, } from 'apollo-utilities';
+import { SelectionNode } from 'graphql';
 
 import { ApolloTransaction } from '../apollo/Transaction';
 import { CacheSnapshot } from '../CacheSnapshot';
 import { areChildrenDynamic, expandVariables } from '../ParsedQueryNode';
 import { JsonObject } from '../primitive';
 import { EntityId, OperationInstance, RawOperation } from '../schema';
-import { DocumentNode, isObject } from '../util';
+import { DocumentNode, isObject, fragmentMapForDocument, SelectionSetNode, FragmentMap } from '../util';
 
 import { ConsoleTracer } from './ConsoleTracer';
 import { QueryInfo } from './QueryInfo';
 import { Tracer } from './Tracer';
-
-// Augment DocumentNode type with Hermes's properties
-// Because react-apollo can call us without doing transformDocument
-// to be safe, we will always call transformDocument then flag that
-// we have already done so to not repeating the process.
-declare module 'graphql/language/ast' {
-  export interface DocumentNode {
-    /** Indicating that query has already ran transformDocument */
-    hasBeenTransformed?: boolean;
-  }
-}
 
 export namespace CacheContext {
 
@@ -211,9 +201,10 @@ export class CacheContext {
    * any other method in the cache.
    */
   transformDocument(document: DocumentNode): DocumentNode {
-    if (this._addTypename && !document.hasBeenTransformed) {
+    this._removeFragments(document);
+    if (this._addTypename && !(document as any).hasBeenTransformed) {
       const transformedDocument = addTypenameToDocument(document);
-      transformedDocument.hasBeenTransformed = true;
+      (transformedDocument as any).hasBeenTransformed = true;
       return transformedDocument;
     }
     return document;
@@ -272,6 +263,40 @@ export class CacheContext {
     return this._queryInfoMap.get(cacheKey)!;
   }
 
+  private _removeFragments(document: DocumentNode): void {
+    const mainOperation = getMainDefinition(document);
+    const fragmentMap = fragmentMapForDocument(document);
+    mainOperation.selectionSet = this._removeSelectionNodeFragments(mainOperation.selectionSet, fragmentMap);
+  }
+
+  private _removeSelectionNodeFragments(selectionSet: SelectionSetNode, fragmentMap: FragmentMap): SelectionSetNode {
+    let resultSelections: SelectionNode[] = [];
+    selectionSet.selections.forEach((selection) => {
+      let selectionSet: SelectionSetNode | undefined;
+      // We don't really have a good way to remove inline fragments :(
+      if (selection.kind === 'FragmentSpread') {
+        const fragment = fragmentMap[selection.name.value];
+        selectionSet = fragment.selectionSet;
+      } else if (selection.kind === "Field") {
+        resultSelections.push(selection);
+        if (selection.selectionSet) {
+          selection.selectionSet = this._removeSelectionNodeFragments(selection.selectionSet, fragmentMap);
+        }
+      } else {
+        selectionSet = selection.selectionSet;
+      }
+
+      if (selectionSet) {
+        selectionSet = this._removeSelectionNodeFragments(selectionSet, fragmentMap);
+        resultSelections = resultSelections.concat(selectionSet.selections);
+      }
+    });
+
+    return {
+      ...selectionSet,
+      selections: resultSelections
+    };
+  }
 }
 
 /**

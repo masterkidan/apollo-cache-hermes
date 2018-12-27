@@ -1,4 +1,5 @@
 import { isEqual, valueFromNode } from 'apollo-utilities';
+import { FieldNode } from 'graphql';
 
 import { CacheContext } from './context';
 import { ConflictingFieldsError } from './errors';
@@ -25,6 +26,7 @@ export type FieldArguments<TArgTypes = JsonScalar> = NestedObject<TArgTypes>;
  */
 export class ParsedQueryNode<TArgTypes = JsonScalar> {
   constructor(
+    public selection: FieldNode,
     /** Any child fields. */
     public children?: ParsedQueryNodeMap<TArgTypes>,
     /**
@@ -40,7 +42,7 @@ export class ParsedQueryNode<TArgTypes = JsonScalar> {
      * Whether a (transitive) child contains arguments.  This allows us to
      * ignore whole subtrees in some situations if they were completely static.
      * */
-    public hasParameterizedChildren?: true,
+    public hasParameterizedChildren?: boolean,
   ) {}
 }
 
@@ -136,7 +138,7 @@ function _buildNodeMap(
 
       const hasParameterizedChildren = areChildrenDynamic(children);
 
-      const node = new ParsedQueryNode(children, schemaName, args, hasParameterizedChildren);
+      const node = new ParsedQueryNode(selection, children, schemaName, args, hasParameterizedChildren);
       nodeMap[name] = _mergeNodes([...path, name], node, nodeMap[name]);
 
     } else if (selection.kind === 'FragmentSpread') {
@@ -266,6 +268,7 @@ export function _expandVariables(parsed?: ParsedQueryWithVariables, variables?: 
     const node = parsed[key];
     if (node.args || node.hasParameterizedChildren) {
       newMap[key] = new ParsedQueryNode(
+        node.selection,
         _expandVariables(node.children, variables),
         node.schemaName,
         expandFieldArguments(node.args, variables),

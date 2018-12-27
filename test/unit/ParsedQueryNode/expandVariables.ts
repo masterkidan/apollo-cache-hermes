@@ -1,4 +1,5 @@
 import gql from 'graphql-tag';
+import { FieldNode } from 'graphql';
 
 import { buildRawOperationFromQuery } from '../../../src/apollo/util';
 import { CacheContext, QueryInfo } from '../../../src/context';
@@ -25,10 +26,10 @@ describe(`ParsedQueryNode.expandVariables`, () => {
     `);
 
     expect(expandVariables(map, undefined)).to.deep.eq({
-      foo: new ParsedQueryNode<JsonScalar>({
-        bar: new ParsedQueryNode(undefined, undefined, { tag: 'hello' }),
+      foo: new ParsedQueryNode<JsonScalar>((<any>null) as FieldNode, {
+        bar: new ParsedQueryNode((<any>null) as FieldNode, undefined, undefined, { tag: 'hello' }),
       }, undefined, { limit: 5 }, true),
-      baz: new ParsedQueryNode(undefined, undefined, { thing: null }),
+      baz: new ParsedQueryNode((<any>null) as FieldNode, undefined, undefined, { thing: null }),
     });
   });
 
@@ -40,7 +41,7 @@ describe(`ParsedQueryNode.expandVariables`, () => {
     `);
 
     expect(expandVariables(map, { foo: 123, bar: 'ohai' })).to.deep.eq({
-      thing: new ParsedQueryNode(undefined, undefined, { a: 123, b: 'ohai' }),
+      thing: new ParsedQueryNode((<any>null) as FieldNode, undefined, undefined, { a: 123, b: 'ohai' }),
     });
   });
 
@@ -58,10 +59,10 @@ describe(`ParsedQueryNode.expandVariables`, () => {
     `);
 
     expect(expandVariables(map, { foo: 123, bar: 'ohai' })).to.deep.eq({
-      one: new ParsedQueryNode<JsonScalar>({
-        two: new ParsedQueryNode<JsonScalar>({
-          three: new ParsedQueryNode({
-            four: new ParsedQueryNode(undefined, undefined, { b: 'ohai' }),
+      one: new ParsedQueryNode<JsonScalar>((<any>null) as FieldNode, {
+        two: new ParsedQueryNode<JsonScalar>((<any>null) as FieldNode, {
+          three: new ParsedQueryNode((<any>null) as FieldNode, {
+            four: new ParsedQueryNode((<any>null) as FieldNode, undefined, undefined, { b: 'ohai' }),
           }, undefined, undefined, true),
         }, undefined, { a: 123 }, true),
       }, undefined, undefined, true),
@@ -76,7 +77,7 @@ describe(`ParsedQueryNode.expandVariables`, () => {
     `);
 
     expect(expandVariables(map, { foo: 123, bar: 'ohai' })).to.deep.eq({
-      thing: new ParsedQueryNode(undefined, undefined, { one: { two: 'ohai', three: [1, 2, 123] } }),
+      thing: new ParsedQueryNode((<any>null) as FieldNode, undefined, undefined, { one: { two: 'ohai', three: [1, 2, 123] } }),
     });
   });
 
